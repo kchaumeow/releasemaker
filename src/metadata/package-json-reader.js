@@ -1,54 +1,46 @@
-import { readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { EXIT_CODES, ReleasemakerError } from '../errors.js';
 
-const PACKAGE_JSON_PATH = 'package.json'
+const preconditionError = (message) => new ReleasemakerError(`[prepare] ${message}`, EXIT_CODES.preconditionFailure);
 
-/**
- * @typedef {object} PackageMetadata
- * @property {string} name
- * @property {string} version
- * @property {Record<string, string>} scripts The `scripts` map, `{}` when package.json defines none.
- */
-
-/**
- * Reads the package.json of the current working directory and returns its name, version and scripts.
- * @returns {Promise<PackageMetadata>}
- */
-export const readPackageJson = async () => {
-    const packageJson = JSON.parse(await readFile(PACKAGE_JSON_PATH, 'utf8'))
-    const error = checkPackageJson(packageJson)
-    if (error) {
-        throw new Error(error)
+const readPackageJsonText = async (directory) => {
+    try {
+        return await readFile(path.join(directory, 'package.json'), 'utf8');
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            throw preconditionError(`no package.json in ${directory}`);
+        }
+        throw error;
     }
-    return { name: packageJson.name, version: packageJson.version, scripts: packageJson.scripts ?? {} }
-}
+};
 
-/**
- * Returns the first error message found when name or version are missing or not strings,
- * or when scripts is present but not an object of strings.
- * @param {unknown} packageJson
- * @returns {string | undefined}
- */
 const checkPackageJson = (packageJson) => {
     if (packageJson === null || Array.isArray(packageJson) || typeof packageJson !== 'object') {
-        return 'package.json must be an object'
+        return 'package.json must be an object';
     }
     for (const property of ['name', 'version']) {
         if (typeof packageJson[property] !== 'string' || packageJson[property] === '') {
-            return `package.json.${property} must be a non-empty string`
+            return `package.json.${property} must be a non-empty string`;
         }
     }
-    if (packageJson.scripts !== undefined && !isStringRecord(packageJson.scripts)) {
-        return 'package.json.scripts must be an object of strings'
+    if (packageJson.private !== undefined && typeof packageJson.private !== 'boolean') {
+        return 'package.json.private must be a boolean';
     }
-}
+    return undefined;
+};
 
-/**
- * Whether a value is a plain object whose values are all strings.
- * @param {unknown} value
- * @returns {boolean}
- */
-const isStringRecord = (value) =>
-    value !== null &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    Object.values(value).every((item) => typeof item === 'string')
+export const readPackageJson = async (directory) => {
+    const text = await readPackageJsonText(directory);
+    let packageJson;
+    try {
+        packageJson = JSON.parse(text);
+    } catch (error) {
+        throw preconditionError(`package.json is not valid JSON: ${error.message}`);
+    }
+    const error = checkPackageJson(packageJson);
+    if (error) {
+        throw preconditionError(error);
+    }
+    return { name: packageJson.name, version: packageJson.version, private: packageJson.private === true };
+};

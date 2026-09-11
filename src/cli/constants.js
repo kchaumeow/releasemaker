@@ -1,38 +1,39 @@
-/** @file Shared CLI constants: the flag table and the release check list. */
-
-/**
- * A table of CLI flags. Each key is the name the parsed arguments use, each
- * value is the `[long, short]` spelling of the flag on the command line.
- * @typedef {Record<string, [string, string]>} FlagTable
- */
-
-/**
- * Flags accepted by every releasemaker command.
- * @type {FlagTable}
- */
-export const FLAGS = {
-    release: ['--release-version', '-r'], // Release the package
-    development: ['--development-version', '-d'], // Override development version
-    tag: ['--tag', '-t'], // Override git tag
-    packages: ['--package', '-p'], // Select workspace package
-    patch: ['--patch', '-P'], // Override patch version
-    minor: ['--minor', '-m'], // Override minor version
-    major: ['--major', '-M'], // Override major version
-    dryRun: ['--dry-run', '-n'], // Dry run mode
-    skipChecks: ['--skip-checks', '-s'], // Skip checks
-    skipPack: ['--skip-pack', '-k'], // Skip pnpm pack validation
+export const PREPARE_OPTIONS = {
+    'release-version': { type: 'string', short: 'r' },
+    'development-version': { type: 'string', short: 'd' },
+    tag: { type: 'string', short: 't' },
+    package: { type: 'string', short: 'p' },
+    patch: { type: 'boolean' },
+    minor: { type: 'boolean' },
+    major: { type: 'boolean' },
+    'non-interactive': { type: 'boolean', short: 'y' },
+    'dry-run': { type: 'boolean' },
+    'skip-checks': { type: 'boolean' },
+    'skip-pack': { type: 'boolean' },
+    help: { type: 'boolean', short: 'h' },
 };
 
-/**
- * Keys of {@link FLAGS} that take no value. Every other flag expects one.
- * @type {ReadonlyArray<string>}
- */
-export const BOOLEAN_FLAGS = ['dryRun', 'skipChecks', 'skipPack'];
+export const RELEASE_SELECTORS = ['release-version', 'patch', 'minor', 'major'];
 
-/**
- * package.json scripts that `prepare` runs as release checks, in this order,
- * when the target package defines them. Scripts not on this list are never
- * run automatically, so things like `dev` or `publish` cannot be triggered.
- * @type {ReadonlyArray<string>}
- */
-export const CHECK_SCRIPTS = ['lint', 'typecheck', 'type-check', 'test', 'build'];
+export const USAGE = `Usage: releasemaker <command> [options]
+
+Commands:
+  prepare   Validate the project and resolve the release plan
+  perform   Publish a prepared release (not implemented yet)
+
+Options for prepare:
+  -r, --release-version <version>      Explicit release version
+  -d, --development-version <version>  Explicit post-release development version
+  -t, --tag <tag>                      Explicit Git release tag
+  -p, --package <name-or-path>         Select a package in a pnpm workspace (not supported yet)
+      --patch                          Select a patch release
+      --minor                          Select a minor release
+      --major                          Select a major release
+  -y, --non-interactive                Accept derived values and never prompt
+      --dry-run                        Resolve and validate without modifying anything
+      --skip-checks                    Skip configured check commands
+      --skip-pack                      Skip pnpm pack validation
+  -h, --help                           Show this help
+
+--release-version, --patch, --minor and --major are mutually exclusive.
+Interactive prompts are not implemented yet; every run behaves as --non-interactive.`;

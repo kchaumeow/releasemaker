@@ -1,170 +1,163 @@
-/**
- * @file The `prepare` command: run the target package's check scripts and validate `pnpm pack`.
- *
- * The target is the package in the directory the CLI was started in, not
- * releasemaker itself. The CLI entry point reads its package.json once and
- * passes the result in as metadata; this module never reads package.json.
- */
-
 import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import { EXIT_CODES, ReleasemakerError } from '../errors.js';
+import { loadConfig } from '../config/config-loader.js';
+import { readPackageJson } from '../metadata/package-json-reader.js';
+import { resolveVersions } from '../version/version-resolver.js';
 import { parseCliArgs } from './args.js';
-import { CHECK_SCRIPTS } from './constants.js';
+import { USAGE } from './constants.js';
 
-/** @typedef {import('../metadata/package-json-reader.js').PackageMetadata} PackageMetadata */
+const PACK_COMMAND = 'pnpm pack --dry-run';
 
-/**
- * Summary of a prepare run.
- * @typedef {Object} PrepareResult
- * @property {string} dir            Directory of the prepared package.
- * @property {string} name           Package name from package.json.
- * @property {string} version        Package version from package.json.
- * @property {string[]} scripts      Every script name the package defines, in package.json order.
- * @property {string[]} checks       Check scripts the package defines, in run order. See {@link CHECK_SCRIPTS}.
- * @property {string[]} ran          Check scripts that were executed and passed. Empty on dry run or skip.
- * @property {string} [tarball]      File name of the tarball created by `pnpm pack`, when it ran.
- * @property {boolean} dryRun        Whether commands were only printed.
- * @property {boolean} skippedChecks Whether `--skip-checks` was set.
- * @property {boolean} skippedPack   Whether `--skip-pack` was set.
- */
+const releaseCommitMessage = (plan) => `release: ${plan.releaseVersion}`;
 
-/** Windows resolves `pnpm.cmd` only through a shell; everywhere else the binary is spawned directly. */
-const useShell = process.platform === 'win32';
+const developmentCommitMessage = (plan) => `chore: prepare development ${plan.developmentVersion}`;
 
-/**
- * Run a pnpm command in `cwd`, streaming its output to the terminal.
- * @param {string} cwd     Directory to run in.
- * @param {...string} args Arguments after `pnpm`, e.g. `'run', 'test'`.
- * @returns {number} The command's exit code.
- * @throws {Error} When pnpm could not be started, or was killed by a signal.
- */
-const pnpm = (cwd, ...args) => {
-    const command = `pnpm ${args.join(' ')}`;
-    const { error, status, signal } = spawnSync('pnpm', args, { cwd, stdio: 'inherit', shell: useShell });
-    if (error) throw new Error(`Could not start "${command}": ${error.message}`);
-    if (status === null) throw new Error(`"${command}" was terminated by signal ${signal}`);
-    return status;
+const formatReleaseBranch = (releaseBranch) => {
+    if (Array.isArray(releaseBranch)) {
+        return releaseBranch.join(', ');
+    }
+    return releaseBranch;
 };
 
-/**
- * Pick the check scripts the package defines, in {@link CHECK_SCRIPTS} order.
- * @param {Record<string, string>} scripts The package.json `scripts` map.
- * @returns {string[]} Names of the check scripts the package has.
- */
-const selectCheckScripts = (scripts) => CHECK_SCRIPTS.filter((name) => Object.hasOwn(scripts, name));
-
-/**
- * Run `pnpm pack` into a fresh temp directory and delete it afterwards.
- * Only the tarball's file name is kept; the point is to prove packing works.
- * @param {string} dir Directory of the package to pack.
- * @returns {string | undefined} File name of the tarball pnpm produced.
- * @throws {Error} When `pnpm pack` exits non-zero.
- */
-const validatePack = (dir) => {
-    const destination = fs.mkdtempSync(path.join(os.tmpdir(), 'releasemaker-pack-'));
-    try {
-        const status = pnpm(dir, 'pack', '--pack-destination', destination);
-        if (status !== 0) throw new Error(`pnpm pack failed with exit code ${status}`);
-        return fs.readdirSync(destination).find((file) => file.endsWith('.tgz'));
-    } finally {
-        fs.rmSync(destination, { recursive: true, force: true });
+const formatRegistry = (registry) => {
+    if (registry === null) {
+        return '(pnpm default)';
     }
+    return registry;
 };
 
-/**
- * Prepare a release.
- *
- * Prints every script the package defines, runs the scripts listed in
- * {@link CHECK_SCRIPTS} that the package has, and finally validates that
- * `pnpm pack` succeeds. The pack tarball is written to a temp directory and
- * deleted afterwards. The first failing check aborts the run.
- *
- * @param {string[]} argv            CLI arguments after the `prepare` command.
- * @param {PackageMetadata} metadata Name, version and scripts of the target package.
- * @returns {PrepareResult} What was found and what ran.
- * @throws {TypeError} When `argv` contains an unknown flag.
- * @throws {Error} When a check script exits non-zero or `pnpm pack` fails.
- */
-const run = (argv, metadata) => {
-    const args = parseCliArgs(argv);
-    // The reader loaded package.json from the working directory, so that is the target package.
-    const dir = process.cwd();
-    const scripts = metadata.scripts ?? {};
-    const scriptNames = Object.keys(scripts);
-
-    console.log(`Preparing ${metadata.name}@${metadata.version}`);
-    console.log(`  directory: ${dir}`);
-    if (scriptNames.length === 0) {
-        console.log('  scripts: none defined in package.json');
-    } else {
-        console.log('  scripts:');
-        for (const name of scriptNames) console.log(`    - ${name}: ${scripts[name]}`);
+const printDryRunPlan = (plan, config) => {
+    console.log(`Package:              ${plan.packageName}`);
+    console.log(`Current version:      ${plan.currentVersion}`);
+    console.log(`Release version:      ${plan.releaseVersion}`);
+    console.log(`Development version:  ${plan.developmentVersion}`);
+    console.log(`Tag:                  ${plan.tag}`);
+    console.log(`Release branch:       ${formatReleaseBranch(config.releaseBranch)}`);
+    console.log(`Registry:             ${formatRegistry(config.registry)}`);
+    console.log('');
+    console.log('Checks:');
+    for (const command of config.checks) {
+        console.log(`  ${command}`);
     }
+    console.log('');
+    console.log('Would create commits:');
+    console.log(`  ${releaseCommitMessage(plan)}`);
+    console.log(`  ${developmentCommitMessage(plan)}`);
+    console.log('');
+    console.log('Would create tag:');
+    console.log(`  ${plan.tag}`);
+};
 
-    const checks = selectCheckScripts(scripts);
-    const ran = [];
+const printPlan = (plan) => {
+    console.log(`[prepare] package ${plan.packageName}`);
+    console.log(`[prepare] ${plan.currentVersion} -> ${plan.releaseVersion} -> ${plan.developmentVersion}`);
+    console.log(`[prepare] tag ${plan.tag}`);
+};
 
+/*
+ * Checks are user-authored shell strings, so they run through the shell.
+ * On Windows this also resolves pnpm.cmd without a platform switch.
+ */
+const runShellCommand = (phase, command, directory) => {
+    console.log(`[${phase}] ${command} ...`);
+    const { error, status, signal } = spawnSync(command, { cwd: directory, shell: true, stdio: 'inherit' });
+    if (error) {
+        throw new ReleasemakerError(`[${phase}] could not start "${command}": ${error.message}`, EXIT_CODES.checkFailure);
+    }
+    if (status === null) {
+        throw new ReleasemakerError(`[${phase}] "${command}" was terminated by signal ${signal}`, EXIT_CODES.checkFailure);
+    }
+    if (status !== 0) {
+        throw new ReleasemakerError(`[${phase}] "${command}" failed with exit code ${status}`, EXIT_CODES.checkFailure);
+    }
+    console.log(`[${phase}] ${command} ... ok`);
+};
+
+const runChecks = (args, config, directory) => {
     if (args.skipChecks) {
-        console.log('\nSkipping checks (--skip-checks).');
-    } else if (checks.length === 0) {
-        console.log(`\nNo check scripts found (looked for: ${CHECK_SCRIPTS.join(', ')}).`);
-    } else {
-        console.log(`\nRunning checks: ${checks.join(', ')}`);
-        for (const check of checks) {
-            console.log(`\n> pnpm run ${check}`);
-            if (args.dryRun) {
-                console.log('  (dry run, not executed)');
-                continue;
-            }
-            const status = pnpm(dir, 'run', check);
-            if (status !== 0) throw new Error(`Check "${check}" failed with exit code ${status}`);
-            ran.push(check);
+        console.error('[prepare] WARNING: --skip-checks given; the configured checks were NOT run:');
+        for (const command of config.checks) {
+            console.error(`  ${command}`);
         }
+        return;
     }
-
-    let tarball;
-    if (args.skipPack) {
-        console.log('\nSkipping pnpm pack validation (--skip-pack).');
-    } else {
-        console.log('\n> pnpm pack');
-        if (args.dryRun) {
-            console.log('  (dry run, not executed)');
-        } else {
-            tarball = validatePack(dir);
-            console.log(`\nPack OK${tarball ? `: ${tarball}` : ''}`);
-        }
+    if (args.dryRun) {
+        console.log('[check] not executed (dry run)');
+        return;
     }
-
-    console.log('\nPrepare finished.');
-    return {
-        dir,
-        name: metadata.name,
-        version: metadata.version,
-        scripts: scriptNames,
-        checks,
-        ran,
-        tarball,
-        dryRun: args.dryRun,
-        skippedChecks: args.skipChecks,
-        skippedPack: args.skipPack,
-    };
+    for (const command of config.checks) {
+        runShellCommand('check', command, directory);
+    }
 };
 
-/**
- * CLI entry point for `prepare`.
- * Runs {@link run} and, on failure, prints the error to stderr and sets a
- * non-zero exit code instead of throwing.
- * @param {string[]} argv            CLI arguments after the `prepare` command.
- * @param {PackageMetadata} metadata Name, version and scripts of the target package.
- * @returns {void}
- */
-export const prepare = (argv, metadata) => {
-    try {
-        run(argv, metadata);
-    } catch (err) {
-        console.error(`\nprepare failed: ${err.message}`);
-        process.exitCode = 1;
+const runPackValidation = (args, config, directory) => {
+    if (!config.pack) {
+        console.log('[pack] skipped (config pack: false)');
+        return;
     }
+    if (args.skipPack) {
+        console.log('[pack] skipped (--skip-pack)');
+        return;
+    }
+    if (args.dryRun) {
+        console.log(`[pack] ${PACK_COMMAND} (not executed)`);
+        return;
+    }
+    runShellCommand('pack', PACK_COMMAND, directory);
+};
+
+export const prepare = async (argumentList, directory) => {
+    const args = parseCliArgs(argumentList);
+    if (args.help) {
+        console.log(USAGE);
+        return;
+    }
+
+    const config = await loadConfig(directory);
+
+    const packageSelector = args.package ?? config.package;
+    if (packageSelector !== null && packageSelector !== undefined) {
+        throw new ReleasemakerError(
+            `[prepare] workspace package selection is not supported yet (got "${packageSelector}")`,
+            EXIT_CODES.invalidUsage,
+        );
+    }
+
+    const metadata = await readPackageJson(directory);
+    if (metadata.private) {
+        throw new ReleasemakerError(
+            `[prepare] package "${metadata.name}" is private and cannot be published`,
+            EXIT_CODES.preconditionFailure,
+        );
+    }
+
+    const versions = resolveVersions({
+        currentVersion: metadata.version,
+        releaseVersion: args.releaseVersion,
+        developmentVersion: args.developmentVersion,
+        bump: args.bump,
+        developmentSuffix: config.developmentSuffix,
+    });
+
+    const plan = {
+        packageName: metadata.name,
+        ...versions,
+        tag: args.tag ?? config.tagFormat.replace('${version}', versions.releaseVersion),
+    };
+
+    if (args.dryRun) {
+        printDryRunPlan(plan, config);
+        console.log('');
+    } else {
+        printPlan(plan);
+    }
+
+    runChecks(args, config, directory);
+    runPackValidation(args, config, directory);
+
+    if (args.dryRun) {
+        console.log('[done] dry run complete; nothing was changed');
+        return;
+    }
+    console.log('[prepare] stopping before Git mutations: commit, tag and development version are not implemented yet');
 };

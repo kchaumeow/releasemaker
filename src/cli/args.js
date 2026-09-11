@@ -1,83 +1,52 @@
-/** @file Command-line argument parsing built on `util.parseArgs` and the shared flag table. */
-
 import { parseArgs } from 'node:util';
-import { FLAGS, BOOLEAN_FLAGS } from './constants.js';
+import { EXIT_CODES, ReleasemakerError } from '../errors.js';
+import { PREPARE_OPTIONS, RELEASE_SELECTORS } from './constants.js';
 
-/** @typedef {import('./constants.js').FlagTable} FlagTable */
+const toCamelCase = (name) => name.replace(/-([a-z])/g, (match, letter) => letter.toUpperCase());
 
-/**
- * Parsed CLI arguments, keyed by the {@link FLAGS} keys.
- * @typedef {Object} CliArgs
- * @property {string} [release]     Value of `--release-version` / `-r`.
- * @property {string} [development] Value of `--development-version` / `-d`.
- * @property {string} [tag]         Value of `--tag` / `-t`.
- * @property {string} [packages]    Value of `--package` / `-p`: the workspace package to act on.
- * @property {string} [patch]       Value of `--patch` / `-P`.
- * @property {string} [minor]       Value of `--minor` / `-m`.
- * @property {string} [major]       Value of `--major` / `-M`.
- * @property {boolean} dryRun       `--dry-run` / `-n`: print commands instead of running them.
- * @property {boolean} skipChecks   `--skip-checks` / `-s`: do not run check scripts.
- * @property {boolean} skipPack     `--skip-pack` / `-k`: do not validate `pnpm pack`.
- * @property {string[]} positionals Arguments that are not flags, in order.
- */
+const usageError = (message) => new ReleasemakerError(`[usage] ${message}`, EXIT_CODES.invalidUsage);
 
-/**
- * One option definition as expected by `util.parseArgs`.
- * @typedef {Object} ParseArgsOption
- * @property {'boolean' | 'string'} type Whether the flag takes a value.
- * @property {string} short              Single-character short alias, without the dash.
- */
-
-const booleanFlags = new Set(BOOLEAN_FLAGS);
-
-/**
- * Strip the leading dashes from a long flag.
- * @param {string} flag A long flag such as `--dry-run`.
- * @returns {string} The bare option name such as `dry-run`.
- */
-function longName(flag) {
-    return flag.replace(/^--/, '');
-}
-
-/**
- * Turn a flag table into the `options` object expected by `util.parseArgs`.
- * Flags listed in {@link BOOLEAN_FLAGS} become boolean options, all others
- * take a string value.
- * @param {FlagTable} [flags=FLAGS] Flag table to convert.
- * @returns {Record<string, ParseArgsOption>} Options keyed by bare long name.
- */
-export function buildOptions(flags = FLAGS) {
-    const options = {};
-    for (const [key, [long, short]] of Object.entries(flags)) {
-        options[longName(long)] = {
-            type: booleanFlags.has(key) ? 'boolean' : 'string',
-            short: short.replace(/^-/, ''),
-        };
+const parseRawValues = (argumentList) => {
+    try {
+        return parseArgs({ args: argumentList, options: PREPARE_OPTIONS, strict: true, allowPositionals: false }).values;
+    } catch (error) {
+        if (typeof error.code === 'string' && error.code.startsWith('ERR_PARSE_ARGS')) {
+            throw usageError(error.message);
+        }
+        throw error;
     }
-    return options;
-}
+};
 
-/**
- * Parse CLI arguments into an object keyed by the flag table keys.
- * Boolean flags default to `false`, value flags to `undefined`.
- * @param {string[]} argv           Arguments to parse: everything after the command name.
- * @param {FlagTable} [flags=FLAGS] Flag table that defines the accepted flags.
- * @returns {CliArgs} The parsed arguments.
- * @throws {TypeError} When an unknown flag is passed or a value flag is missing its value.
- */
-export function parseCliArgs(argv, flags = FLAGS) {
-    const { values, positionals } = parseArgs({
-        args: argv,
-        options: buildOptions(flags),
-        strict: true,
-        allowPositionals: true,
-    });
+const resolveBump = (values) => {
+    for (const name of ['patch', 'minor', 'major']) {
+        if (values[name] === true) {
+            return name;
+        }
+    }
+    return undefined;
+};
+
+export const parseCliArgs = (argumentList) => {
+    const values = parseRawValues(argumentList);
+
+    const selectors = RELEASE_SELECTORS.filter((name) => values[name] !== undefined && values[name] !== false);
+    if (selectors.length > 1) {
+        const given = selectors.map((name) => `--${name}`).join(', ');
+        throw usageError(`--release-version, --patch, --minor, --major are mutually exclusive (got ${given})`);
+    }
 
     const result = {};
-    for (const [key, [long]] of Object.entries(flags)) {
-        const value = values[longName(long)];
-        result[key] = booleanFlags.has(key) ? Boolean(value) : value;
+    for (const [name, option] of Object.entries(PREPARE_OPTIONS)) {
+        const value = values[name];
+        if (option.type === 'boolean') {
+            result[toCamelCase(name)] = value === true;
+        } else {
+            if (value === '') {
+                throw usageError(`--${name} requires a non-empty value`);
+            }
+            result[toCamelCase(name)] = value;
+        }
     }
-    result.positionals = positionals;
+    result.bump = resolveBump(values);
     return result;
-}
+};

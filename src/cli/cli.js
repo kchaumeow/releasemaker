@@ -1,38 +1,45 @@
 #!/usr/bin/env node
-/** @file Entry point of the releasemaker CLI. Prints usage and dispatches `prepare` and `perform`. */
-import { readPackageJson } from '../metadata/package-json-reader.js';
+import { EXIT_CODES, ReleasemakerError } from '../errors.js';
+import { USAGE } from './constants.js';
 
-const startText = `
-  Welcome to the Releasemaker CLI!
-  This tool helps you prepare and perform releases for your projects.
-  Available commands:
-    - prepare: Prepare the release by gathering necessary information.
-    - perform: Perform the release based on the prepared information.
-  Flags:
-    --release-version, -r: Release the package
-    --development-version, -d: Override development version
-    --tag, -t: Override git tag
-    --package, -p: Select workspace package
-    --patch, -P: Override patch version
-    --minor, -m: Override minor version
-    --major, -M: Override major version
-    --dry-run, -n: Dry run mode
-    --skip-checks, -s: Skip checks
-    --skip-pack, -k: Skip pnpm pack validation
-`;
-console.log(startText);
+const HELP_FLAGS = ['--help', '-h'];
 
-switch (process.argv[2]) {
-    case 'prepare': {
-        const { prepare } = await import('./prepare.js');
-        const metadata = await readPackageJson();
-        prepare(process.argv.slice(3), metadata);
-        break;
+const command = process.argv[2];
+const commandArguments = process.argv.slice(3);
+
+const run = async () => {
+    if (command === undefined) {
+        console.error(USAGE);
+        process.exitCode = EXIT_CODES.invalidUsage;
+        return;
     }
-    case 'perform':
-        // const { main } = await import('./perform.js');
-        break;
-    default:
-        console.log('Invalid command. Use "prepare" or "perform".');
-        process.exit(1);
+    if (HELP_FLAGS.includes(command)) {
+        console.log(USAGE);
+        return;
+    }
+    if (command === 'prepare') {
+        const { prepare } = await import('./prepare.js');
+        await prepare(commandArguments, process.cwd());
+        return;
+    }
+    if (command === 'perform') {
+        if (commandArguments.some((argument) => HELP_FLAGS.includes(argument))) {
+            console.log(USAGE);
+            return;
+        }
+        throw new ReleasemakerError('[perform] No prepared release could be resolved.', EXIT_CODES.preconditionFailure);
+    }
+    throw new ReleasemakerError(`[usage] unknown command "${command}"; use "prepare" or "perform"`, EXIT_CODES.invalidUsage);
+};
+
+try {
+    await run();
+} catch (error) {
+    if (error instanceof ReleasemakerError) {
+        console.error(error.message);
+        process.exitCode = error.exitCode;
+    } else {
+        console.error(`[releasemaker] unexpected error: ${error.stack}`);
+        process.exitCode = EXIT_CODES.generalFailure;
+    }
 }
