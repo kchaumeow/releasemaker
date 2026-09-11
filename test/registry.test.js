@@ -1,8 +1,8 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { rmSync } from 'node:fs';
-import { registryOption, versionExists } from '../../src/registry/registry.js';
-import { createFakePnpm } from '../helpers/fake-pnpm.js';
+import { registryOption, versionExists } from '../src/registry.js';
+import { createFakePnpm } from './helpers/fake-pnpm.js';
 
 const fakes = [];
 const fakePnpm = () => {

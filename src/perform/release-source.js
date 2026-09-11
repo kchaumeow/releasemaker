@@ -1,9 +1,9 @@
 import semver from 'semver';
-import { EXIT_CODES, ReleasemakerError } from '../errors.js';
-import * as git from '../git/git.js';
-import { readReleaseState } from '../prepare/release-state.js';
+import { EXIT_CODES, failure } from '../errors.js';
+import * as git from '../git.js';
+import { readReleaseState } from '../release-state.js';
 
-const performError = (message) => new ReleasemakerError(`[perform] ${message}`, EXIT_CODES.preconditionFailure);
+const performError = failure('perform', EXIT_CODES.preconditionFailure);
 
 export const tagToVersion = (tag, tagFormat) => {
     const [prefix, suffix] = tagFormat.split('${version}');

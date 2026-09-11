@@ -1,9 +1,9 @@
 import { realpathSync } from 'node:fs';
-import { loadConfig } from '../config/config-loader.js';
-import { performRelease } from '../perform/pipeline.js';
-import { resolveReleaseTag } from '../perform/release-source.js';
-import { parsePerformArgs } from './args.js';
-import { PERFORM_USAGE } from './constants.js';
+import { loadConfig } from '../config/loader.js';
+import { performRelease } from './pipeline.js';
+import { resolveReleaseTag } from './release-source.js';
+import { parsePerformArgs } from '../cli/args.js';
+import { PERFORM_USAGE } from '../cli/usage.js';
 
 export const perform = async (argumentList, directory) => {
     const args = parsePerformArgs(argumentList);

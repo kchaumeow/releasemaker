@@ -48,6 +48,7 @@ if (command === 'view') {
 }
 if (command === 'pack') {
     fail('pack');
+    if (failures.packOutput !== undefined) { console.log(failures.packOutput); process.exit(0); }
     const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
     const filename = manifest.name.replace(/^@/, '').replace('/', '-') + '-' + manifest.version + '.tgz';
     const destinationIndex = args.indexOf('--pack-destination');

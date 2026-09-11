@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { EXIT_CODES, ReleasemakerError } from '../errors.js';
+import { EXIT_CODES, failure } from './errors.js';
 
-const preconditionError = (message) => new ReleasemakerError(`[prepare] ${message}`, EXIT_CODES.preconditionFailure);
+const preconditionError = failure('prepare', EXIT_CODES.preconditionFailure);
 
 const readPackageJsonText = async (directory) => {
     try {

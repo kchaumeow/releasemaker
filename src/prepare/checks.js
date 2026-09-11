@@ -1,10 +1,10 @@
 import { accessSync, constants } from 'node:fs';
 import path from 'node:path';
-import { EXIT_CODES, ReleasemakerError } from '../errors.js';
-import * as git from '../git/git.js';
+import { EXIT_CODES, failure } from '../errors.js';
+import * as git from '../git.js';
 import { runInherited } from '../shell.js';
 
-const checkError = (message) => new ReleasemakerError(`[check] ${message}`, EXIT_CODES.checkFailure);
+const checkError = failure('check', EXIT_CODES.checkFailure);
 
 const isExecutable = (filePath) => {
     try {
@@ -16,6 +16,10 @@ const isExecutable = (filePath) => {
 };
 
 const executableName = (command) => command.trim().split(/\s+/)[0];
+
+const SHELL_EXPRESSION = /[|&;<>()`$]/;
+
+const isShellExpression = (command) => SHELL_EXPRESSION.test(command) || executableName(command).includes('=');
 
 /*
  * Dry runs must not execute user checks (they may mutate files), so the
@@ -46,6 +50,10 @@ export const unresolvableCheck = (command, directory) => {
 
 export const verifyChecksResolvable = (config, directory) => {
     for (const command of config.checks) {
+        if (isShellExpression(command)) {
+            console.log(`[check] ${command} ... not verified (shell expression, not executed in dry run)`);
+            continue;
+        }
         const missing = unresolvableCheck(command, directory);
         if (missing !== undefined) {
             throw checkError(`command "${missing}" of check "${command}" was not found`);

@@ -1,9 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { EXIT_CODES, ReleasemakerError } from '../errors.js';
+import { EXIT_CODES, failure } from './errors.js';
 
-const gitError = (message) => new ReleasemakerError(`[git] ${message}`, EXIT_CODES.gitFailure);
+const gitError = failure('git', EXIT_CODES.gitFailure);
 
 const run = (directory, argumentList) => {
     const { error, status, stdout, stderr } = spawnSync('git', argumentList, { cwd: directory, encoding: 'utf8' });
@@ -53,12 +53,22 @@ export const operationInProgress = (directory) => {
 };
 
 /*
- * Porcelain v1 prints "XY path" and, for renames, "XY old -> new"; only the
- * final path is relevant for reporting and for the whitelist checks.
+ * Without -z porcelain C-quotes any path with a space or a non-ASCII byte.
+ * With it a rename entry carries the new path and is followed by a bare field
+ * holding the old one, which is not a changed path of its own.
  */
 export const changedPaths = (directory) => {
-    const output = runOrThrow(directory, ['status', '--porcelain=v1', '--untracked-files=all']);
-    return lines(output).map((line) => line.slice(3).split(' -> ').pop());
+    const output = runOrThrow(directory, ['status', '--porcelain=v1', '--untracked-files=all', '-z']);
+    const fields = output.split('\0').filter((field) => field !== '');
+    const paths = [];
+    for (let index = 0; index < fields.length; index += 1) {
+        const status = fields[index].slice(0, 2);
+        paths.push(fields[index].slice(3));
+        if (status.includes('R') || status.includes('C')) {
+            index += 1;
+        }
+    }
+    return paths;
 };
 
 export const upstream = (directory) => {

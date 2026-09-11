@@ -1,5 +1,5 @@
-import { quote, runCaptured, runInherited } from '../shell.js';
-import { EXIT_CODES } from '../errors.js';
+import { quote, runCaptured, runInherited } from './shell.js';
+import { EXIT_CODES } from './errors.js';
 
 const ABSENT_CODES = ['ERR_PNPM_PACKAGE_NOT_FOUND', 'ERR_PNPM_FETCH_404'];
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkConfig } from '../../src/config/config-checker.js';
+import { checkConfig } from '../../src/config/checker.js';
 
 test('accepts an empty config', () => {
     // Given

@@ -1,12 +1,12 @@
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { EXIT_CODES, ReleasemakerError } from '../errors.js';
-import { DEFAULT_CONFIG } from './default-config.js';
-import { checkConfig } from './config-checker.js';
+import { EXIT_CODES, failure } from '../errors.js';
+import { DEFAULT_CONFIG } from './defaults.js';
+import { checkConfig } from './checker.js';
 
 const CONFIG_FILE_NAMES = ['releasemaker.json', '.releasemakerrc'];
 
-const configError = (message) => new ReleasemakerError(`[config] ${message}`, EXIT_CODES.invalidUsage);
+const configError = failure('config', EXIT_CODES.invalidUsage);
 
 const exists = async (filePath) => {
     try {

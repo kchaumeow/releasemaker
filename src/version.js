@@ -1,5 +1,5 @@
 import semver from 'semver';
-import { EXIT_CODES, ReleasemakerError } from '../errors.js';
+import { EXIT_CODES, failure } from './errors.js';
 
 const isStrictSemVer = (value) => semver.valid(value) === value;
 
@@ -56,7 +56,7 @@ export const checkVersions = ({ currentVersion, releaseVersion, developmentVersi
     checkReleaseVersion({ currentVersion, releaseVersion, developmentSuffix }) ??
     checkDevelopmentVersion({ releaseVersion, developmentVersion });
 
-const preconditionError = (message) => new ReleasemakerError(`[prepare] ${message}`, EXIT_CODES.preconditionFailure);
+const preconditionError = failure('prepare', EXIT_CODES.preconditionFailure);
 
 export const resolveVersions = ({ currentVersion, releaseVersion, developmentVersion, bump, developmentSuffix }) => {
     if (!isStrictSemVer(currentVersion)) {

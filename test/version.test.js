@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveVersions } from '../../src/version/version-resolver.js';
+import { resolveVersions } from '../src/version.js';
 
 const resolve = (currentVersion, overrides = {}) =>
     resolveVersions({ currentVersion, developmentSuffix: 'alpha', ...overrides });

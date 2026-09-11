@@ -1,7 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readPackageJson } from '../../src/metadata/package-json-reader.js';
-import { createFixture, removeFixture } from '../helpers/fixture.js';
+import { readPackageJson } from '../src/package-json.js';
+import { createFixture, removeFixture } from './helpers/fixture.js';
 
 const fixtures = [];
 const fixture = (files) => {

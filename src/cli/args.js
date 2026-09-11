@@ -1,10 +1,35 @@
 import { parseArgs } from 'node:util';
-import { EXIT_CODES, ReleasemakerError } from '../errors.js';
-import { PERFORM_OPTIONS, PREPARE_OPTIONS, RELEASE_SELECTORS } from './constants.js';
+import { EXIT_CODES, failure } from '../errors.js';
+
+const PREPARE_OPTIONS = {
+    'release-version': { type: 'string', short: 'r' },
+    'development-version': { type: 'string', short: 'd' },
+    tag: { type: 'string', short: 't' },
+    package: { type: 'string', short: 'p' },
+    patch: { type: 'boolean' },
+    minor: { type: 'boolean' },
+    major: { type: 'boolean' },
+    'non-interactive': { type: 'boolean', short: 'y' },
+    'dry-run': { type: 'boolean' },
+    'skip-checks': { type: 'boolean' },
+    'skip-pack': { type: 'boolean' },
+    help: { type: 'boolean', short: 'h' },
+};
+
+const PERFORM_OPTIONS = {
+    tag: { type: 'string', short: 't' },
+    package: { type: 'string', short: 'p' },
+    registry: { type: 'string' },
+    'dry-run': { type: 'boolean' },
+    'skip-build': { type: 'boolean' },
+    help: { type: 'boolean', short: 'h' },
+};
+
+const RELEASE_SELECTORS = ['release-version', 'patch', 'minor', 'major'];
 
 const toCamelCase = (name) => name.replace(/-([a-z])/g, (match, letter) => letter.toUpperCase());
 
-const usageError = (message) => new ReleasemakerError(`[usage] ${message}`, EXIT_CODES.invalidUsage);
+const usageError = failure('usage', EXIT_CODES.invalidUsage);
 
 const parseRawValues = (argumentList, options) => {
     try {

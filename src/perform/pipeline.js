@@ -1,16 +1,16 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import semver from 'semver';
-import { EXIT_CODES, ReleasemakerError } from '../errors.js';
-import * as git from '../git/git.js';
-import { removeReleaseState } from '../prepare/release-state.js';
-import { publishTarball, versionExists } from '../registry/registry.js';
+import { EXIT_CODES, failure } from '../errors.js';
+import * as git from '../git.js';
+import { removeReleaseState } from '../release-state.js';
+import { publishTarball, versionExists } from '../registry.js';
 import { quote, runCaptured, runInherited } from '../shell.js';
-import { selectPackage } from '../workspace/workspace.js';
+import { selectPackage } from '../workspace.js';
 import { tagToVersion } from './release-source.js';
 
-const performError = (message, exitCode = EXIT_CODES.preconditionFailure) => new ReleasemakerError(`[perform] ${message}`, exitCode);
+const performError = failure('perform', EXIT_CODES.preconditionFailure);
 
 const checkTaggedPackage = ({ metadata, tag, tagFormat }) => {
     if (metadata.private) {
@@ -48,11 +48,16 @@ const pack = (packageDirectory, destination) => {
     if (result.status !== 0) {
         throw performError(`"${command}" failed: ${(result.stderr || result.stdout).trim()}`, EXIT_CODES.checkFailure);
     }
+    let filename;
     try {
-        return JSON.parse(result.stdout).filename;
+        filename = JSON.parse(result.stdout).filename;
     } catch {
+        filename = undefined;
+    }
+    if (typeof filename !== 'string') {
         throw performError(`could not read the pnpm pack output: ${result.stdout.trim()}`, EXIT_CODES.checkFailure);
     }
+    return filename;
 };
 
 /*
@@ -82,9 +87,13 @@ const publish = ({ tarballPath, metadata, registry, directory }) => {
 
 const cleanup = (directory, worktree, temporary) => {
     try {
-        if (git.isRepository(worktree)) {
+        if (existsSync(worktree) && git.isRepository(worktree)) {
             git.worktreeRemove(directory, worktree);
         }
+    } catch (error) {
+        console.error(`[perform] WARNING: the worktree ${worktree} could not be removed: ${error.message}`);
+    }
+    try {
         rmSync(temporary, { recursive: true, force: true });
     } catch (error) {
         console.error(`[perform] WARNING: cleanup of ${temporary} failed: ${error.message}`);

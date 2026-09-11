@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { EXIT_CODES, ReleasemakerError } from '../errors.js';
-import { USAGE } from './constants.js';
+import { USAGE } from './usage.js';
 
 const HELP_FLAGS = ['--help', '-h'];
 
@@ -20,12 +20,12 @@ const run = async () => {
         return;
     }
     if (command === 'prepare') {
-        const { prepare } = await import('./prepare.js');
+        const { prepare } = await import('../prepare/prepare.js');
         await prepare(commandArguments, process.cwd(), io);
         return;
     }
     if (command === 'perform') {
-        const { perform } = await import('./perform.js');
+        const { perform } = await import('../perform/perform.js');
         await perform(commandArguments, process.cwd());
         return;
     }

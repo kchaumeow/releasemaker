@@ -1,7 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadConfig } from '../../src/config/config-loader.js';
-import { DEFAULT_CONFIG } from '../../src/config/default-config.js';
+import { loadConfig } from '../../src/config/loader.js';
+import { DEFAULT_CONFIG } from '../../src/config/defaults.js';
 import { createFixture, removeFixture } from '../helpers/fixture.js';
 
 const fixtures = [];

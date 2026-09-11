@@ -15,3 +15,6 @@ export class ReleasemakerError extends Error {
         this.exitCode = exitCode;
     }
 }
+
+export const failure = (prefix, defaultExitCode) => (message, exitCode = defaultExitCode) =>
+    new ReleasemakerError(`[${prefix}] ${message}`, exitCode);

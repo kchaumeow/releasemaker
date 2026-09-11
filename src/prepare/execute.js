@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { EXIT_CODES, ReleasemakerError } from '../errors.js';
-import * as git from '../git/git.js';
+import { EXIT_CODES, failure } from '../errors.js';
+import * as git from '../git.js';
 import { runInherited } from '../shell.js';
-import { writeReleaseState } from './release-state.js';
+import { writeReleaseState } from '../release-state.js';
 
 const PACK_COMMAND = 'pnpm pack --dry-run';
 const LOCKFILE_COMMAND = 'pnpm install --lockfile-only --prefer-offline';
@@ -13,7 +13,7 @@ export const releaseCommitMessage = (plan) => `release: ${plan.releaseVersion}`;
 
 export const developmentCommitMessage = (plan) => `chore: prepare development ${plan.developmentVersion}`;
 
-const preconditionError = (message) => new ReleasemakerError(`[prepare] ${message}`, EXIT_CODES.preconditionFailure);
+const preconditionError = failure('prepare', EXIT_CODES.preconditionFailure);
 
 const detectIndent = (text) => {
     const match = text.match(/^([ \t]+)"/m);
@@ -63,7 +63,7 @@ const runPackValidation = (args, config, packageDirectory) => {
     runInherited('pack', PACK_COMMAND, packageDirectory, EXIT_CODES.checkFailure);
 };
 
-const commitVersion = ({ directory, packageJsonRelativePath, version }) => {
+const stageVersion = ({ directory, packageJsonRelativePath, version }) => {
     writeVersion(path.join(directory, packageJsonRelativePath), version);
     updateLockfile(directory, packageJsonRelativePath);
     git.addPaths(directory, git.changedPaths(directory));
@@ -129,14 +129,14 @@ export const executePrepare = ({ directory, packageDirectory, config, args, plan
     const releaseMessage = releaseCommitMessage(plan);
     const developmentMessage = developmentCommitMessage(plan);
     try {
-        commitVersion({ directory, packageJsonRelativePath, version: plan.releaseVersion });
+        stageVersion({ directory, packageJsonRelativePath, version: plan.releaseVersion });
         runPackValidation(args, config, packageDirectory);
         transaction.releaseCommit = git.commit(directory, releaseMessage);
         console.log(`[git] commit ${releaseMessage}`);
         git.createAnnotatedTag(directory, plan.tag, releaseMessage);
         transaction.tagCreated = true;
         console.log(`[git] tag ${plan.tag}`);
-        commitVersion({ directory, packageJsonRelativePath, version: plan.developmentVersion });
+        stageVersion({ directory, packageJsonRelativePath, version: plan.developmentVersion });
         transaction.developmentCommit = git.commit(directory, developmentMessage);
         console.log(`[git] commit ${developmentMessage}`);
         recordReleaseState(directory, plan, transaction);

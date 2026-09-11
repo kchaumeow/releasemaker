@@ -1,29 +1,3 @@
-export const PREPARE_OPTIONS = {
-    'release-version': { type: 'string', short: 'r' },
-    'development-version': { type: 'string', short: 'd' },
-    tag: { type: 'string', short: 't' },
-    package: { type: 'string', short: 'p' },
-    patch: { type: 'boolean' },
-    minor: { type: 'boolean' },
-    major: { type: 'boolean' },
-    'non-interactive': { type: 'boolean', short: 'y' },
-    'dry-run': { type: 'boolean' },
-    'skip-checks': { type: 'boolean' },
-    'skip-pack': { type: 'boolean' },
-    help: { type: 'boolean', short: 'h' },
-};
-
-export const PERFORM_OPTIONS = {
-    tag: { type: 'string', short: 't' },
-    package: { type: 'string', short: 'p' },
-    registry: { type: 'string' },
-    'dry-run': { type: 'boolean' },
-    'skip-build': { type: 'boolean' },
-    help: { type: 'boolean', short: 'h' },
-};
-
-export const RELEASE_SELECTORS = ['release-version', 'patch', 'minor', 'major'];
-
 export const PREPARE_USAGE = `Usage: releasemaker prepare [options]
 
 Validate the project, choose the release and development versions, run the

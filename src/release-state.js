@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import * as git from '../git/git.js';
+import * as git from './git.js';
 
 const STATE_RELATIVE_PATH = path.join('.releasemaker', 'release-state.json');
 

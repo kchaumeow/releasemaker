@@ -2,8 +2,8 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { readReleaseState, releaseStatePath, removeReleaseState, writeReleaseState } from '../../src/prepare/release-state.js';
-import { createGitRepository } from '../helpers/git-fixture.js';
+import { readReleaseState, releaseStatePath, removeReleaseState, writeReleaseState } from '../src/release-state.js';
+import { createGitRepository } from './helpers/git-fixture.js';
 
 const roots = [];
 const repository = () => {

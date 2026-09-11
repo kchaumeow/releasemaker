@@ -1,6 +1,6 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runCli } from '../helpers/fixture.js';
@@ -305,4 +305,53 @@ test('perform quotes paths and the registry when calling pnpm', () => {
     assert.equal(result.status, 0, result.stderr);
     assert.equal(pnpmCalls(pnpm)[0], 'view @company/ui@1.4.0 version --json --registry https://r.example.com/with space/');
     assert.match(pnpmCalls(pnpm)[4], /^publish \/.*company-ui-1\.4\.0\.tgz --no-git-checks --registry https:\/\/r\.example\.com\/with space\/$/);
+});
+
+test('--package selects a workspace package by path', () => {
+    // Given
+    const files = {
+        'pnpm-workspace.yaml': 'packages:\n  - packages/*\n',
+        'packages/ui/package.json': { name: '@company/ui', version: '1.4.0-alpha' },
+    };
+    const { directory, env } = preparedFixture({
+        config: { ...FAST, package: 'packages/ui' },
+        packageJson: { name: 'root', version: '0.0.0', private: true },
+        files,
+    });
+
+    // When
+    const result = runCli(['perform', '--package', 'packages/ui'], directory, env);
+
+    // Then
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /\[perform\] package @company\/ui@1\.4\.0/);
+});
+
+test('a failed worktree checkout leaves no temporary directory behind', () => {
+    // Given
+    const { directory, env } = preparedFixture();
+    const temporary = mkdtempSync(path.join(os.tmpdir(), 'releasemaker-tmpdir-'));
+    chmodSync(path.join(directory, '.git'), 0o500);
+
+    // When
+    const result = runCli(['perform'], directory, { ...env, TMPDIR: temporary });
+
+    // Then
+    chmodSync(path.join(directory, '.git'), 0o700);
+    assert.equal(result.status, 5);
+    assert.deepEqual(readdirSync(temporary).filter((entry) => entry.startsWith('releasemaker-perform-')), []);
+    rmSync(temporary, { recursive: true, force: true });
+});
+
+test('a pack output without a filename fails with exit code 4', () => {
+    // Given
+    const { directory, env, pnpm } = preparedFixture();
+    pnpm.setFailures({ packOutput: '[]' });
+
+    // When
+    const result = runCli(['perform'], directory, env);
+
+    // Then
+    assert.equal(result.status, 4);
+    assert.match(result.stderr, /could not read the pnpm pack output/);
 });

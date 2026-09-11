@@ -1,10 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
-import { EXIT_CODES, ReleasemakerError } from '../errors.js';
-import * as git from '../git/git.js';
-import { versionExists } from '../registry/registry.js';
+import { EXIT_CODES, failure } from '../errors.js';
+import * as git from '../git.js';
+import { versionExists } from '../registry.js';
 
-const preconditionError = (message) => new ReleasemakerError(`[prepare] ${message}`, EXIT_CODES.preconditionFailure);
+const preconditionError = failure('prepare', EXIT_CODES.preconditionFailure);
 
 const lockfileDisabled = (directory) => {
     const npmrcPath = path.join(directory, '.npmrc');
@@ -51,6 +51,9 @@ const checkUpstream = async ({ directory, branch, unverifiable }) => {
 export const checkRepositoryState = async ({ directory, config, unverifiable }) => {
     if (!git.isRepository(directory)) {
         throw preconditionError(`${directory} is not inside a Git repository`);
+    }
+    if (realpathSync(git.topLevel(directory)) !== directory) {
+        throw preconditionError(`prepare must run in the repository root (${git.topLevel(directory)})`);
     }
     const changed = git.changedPaths(directory);
     if (changed.length > 0) {

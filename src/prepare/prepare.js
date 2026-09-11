@@ -1,22 +1,24 @@
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
-import { EXIT_CODES, ReleasemakerError } from '../errors.js';
-import { loadConfig } from '../config/config-loader.js';
-import { checkReleasePlan, checkRepositoryState } from '../prepare/preconditions.js';
-import { runChecks, verifyChecksResolvable } from '../prepare/checks.js';
-import { developmentCommitMessage, executePrepare, releaseCommitMessage } from '../prepare/execute.js';
+import { EXIT_CODES, failure } from '../errors.js';
+import { loadConfig } from '../config/loader.js';
+import { checkReleasePlan, checkRepositoryState } from './preconditions.js';
+import { runChecks, verifyChecksResolvable } from './checks.js';
+import { developmentCommitMessage, executePrepare, releaseCommitMessage } from './execute.js';
 import {
     checkDevelopmentVersion,
     checkReleaseVersion,
     defaultDevelopmentVersion,
     resolveVersions,
-} from '../version/version-resolver.js';
-import { selectPackage } from '../workspace/workspace.js';
-import { parsePrepareArgs } from './args.js';
-import { PREPARE_USAGE } from './constants.js';
-import { createPrompter } from './prompter.js';
+} from '../version.js';
+import { selectPackage } from '../workspace.js';
+import { parsePrepareArgs } from '../cli/args.js';
+import { PREPARE_USAGE } from '../cli/usage.js';
+import { createPrompter } from '../cli/prompter.js';
 
-const cancelledError = () => new ReleasemakerError('[prepare] cancelled; nothing was changed', EXIT_CODES.cancelled);
+const prepareError = failure('prepare', EXIT_CODES.preconditionFailure);
+
+const cancelledError = () => prepareError('cancelled; nothing was changed', EXIT_CODES.cancelled);
 
 const formatReleaseBranch = (releaseBranch) => [].concat(releaseBranch).join(', ');
 
@@ -69,10 +71,13 @@ const formatTag = (config, releaseVersion) => config.tagFormat.replace('${versio
  * Remote and registry outages are reported once; the interactive user decides,
  * every non-interactive run (including dry runs) fails closed.
  */
-const unverifiablePolicy = (prompter) => async (reason) => {
+const unverifiablePolicy = ({ prompter, dryRun }) => async (reason) => {
     console.error(`[prepare] WARNING: ${reason}`);
     if (prompter === undefined) {
-        throw new ReleasemakerError('[prepare] the remote state could not be verified; refusing to continue non-interactively', EXIT_CODES.preconditionFailure);
+        throw prepareError('the remote state could not be verified; refusing to continue non-interactively');
+    }
+    if (dryRun) {
+        throw prepareError('the remote state could not be verified; refusing to continue a dry run');
     }
     if (!(await prompter.confirm('Continue without this check?', false))) {
         throw cancelledError();
@@ -146,7 +151,7 @@ const confirmPlan = async (prompter, config) => {
 
 const run = async ({ args, directory, prompter }) => {
     const config = await loadConfig(directory);
-    const unverifiable = unverifiablePolicy(prompter);
+    const unverifiable = unverifiablePolicy({ prompter, dryRun: args.dryRun });
     const { remote } = await checkRepositoryState({ directory, config, unverifiable });
 
     let chooser;
@@ -155,10 +160,7 @@ const run = async ({ args, directory, prompter }) => {
     }
     const selection = await selectPackage({ selector: args.package ?? config.package, directory, chooser });
     if (selection.metadata.private) {
-        throw new ReleasemakerError(
-            `[prepare] package "${selection.metadata.name}" is private and cannot be published`,
-            EXIT_CODES.preconditionFailure,
-        );
+        throw prepareError(`package "${selection.metadata.name}" is private and cannot be published`);
     }
 
     const plan = await resolvePlan({ prompter, args, config, selection });

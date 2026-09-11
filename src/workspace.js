@@ -1,10 +1,10 @@
 import { existsSync, realpathSync } from 'node:fs';
 import path from 'node:path';
-import { EXIT_CODES, ReleasemakerError } from '../errors.js';
-import { readPackageJson } from '../metadata/package-json-reader.js';
-import { runCaptured } from '../shell.js';
+import { EXIT_CODES, failure } from './errors.js';
+import { readPackageJson } from './package-json.js';
+import { runCaptured } from './shell.js';
 
-const selectionError = (message) => new ReleasemakerError(`[package] ${message}`, EXIT_CODES.preconditionFailure);
+const selectionError = failure('package', EXIT_CODES.preconditionFailure);
 
 export const isWorkspace = (directory) => existsSync(path.join(directory, 'pnpm-workspace.yaml'));
 
@@ -22,7 +22,7 @@ const selected = async (packageDirectory) => ({ directory: packageDirectory, met
 
 const selectBySelector = async (selector, directory) => {
     const projects = listProjects(directory);
-    const target = path.resolve(directory, selector);
+    const target = path.resolve(realpathSync(directory), selector);
     const matches = projects.filter((project) => project.name === selector || project.path === target);
     if (matches.length === 0) {
         throw selectionError(`"${selector}" matches no workspace package (known: ${describe(projects)})`);

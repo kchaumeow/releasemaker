@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
-import { prepare } from '../../src/cli/prepare.js';
+import { prepare } from '../../src/prepare/prepare.js';
 import { git } from '../helpers/git-fixture.js';
 import { trackFixtures } from '../helpers/release-fixture.js';
 
@@ -141,4 +141,17 @@ test('a private workspace root asks which package to release', async () => {
     assert.match(result.transcript, /1\) @company\/core 2\.0\.0-alpha/);
     assert.match(result.transcript, /2\) @company\/ui 1\.4\.0-alpha/);
     assert.equal(git(created.directory, 'tag'), 'v1.4.0');
+});
+
+test('a dry run refuses to continue past an unverifiable registry even on a TTY', async () => {
+    // Given
+    const created = fixture({ config: FAST });
+    created.pnpm.setRegistry({ '@company/ui@1.4.0': 'unreachable' });
+
+    // When
+    const result = await runInteractive(['--dry-run'], created, []);
+
+    // Then
+    assert.equal(result.exitCode, 3);
+    assert.match(result.message, /refusing to continue a dry run/);
 });

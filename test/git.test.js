@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import * as git from '../../src/git/git.js';
-import { createGitRepository, commitAll, git as gitCommand, writeFiles } from '../helpers/git-fixture.js';
+import * as git from '../src/git.js';
+import { createGitRepository, commitAll, git as gitCommand, writeFiles } from './helpers/git-fixture.js';
 
 const roots = [];
 const repository = (files, options) => {
@@ -237,4 +237,28 @@ test('git failures throw exit code 5', () => {
 
     // When / Then
     assert.throws(() => git.deleteTag(directory, 'missing'), { exitCode: 5, message: /\[git\] "git tag --delete missing" failed/ });
+});
+
+test('changedPaths reports paths with spaces and non-ASCII characters unquoted', () => {
+    // Given
+    const { directory } = repository();
+    writeFiles(directory, { 'caf\u00e9 note.txt': 'x' });
+
+    // When
+    const paths = git.changedPaths(directory);
+
+    // Then
+    assert.deepEqual(paths, ['caf\u00e9 note.txt']);
+});
+
+test('changedPaths reports the new path of a rename once', () => {
+    // Given
+    const { directory } = repository({ 'old name.txt': 'x' });
+    gitCommand(directory, 'mv', 'old name.txt', 'new name.txt');
+
+    // When
+    const paths = git.changedPaths(directory);
+
+    // Then
+    assert.deepEqual(paths, ['new name.txt']);
 });
