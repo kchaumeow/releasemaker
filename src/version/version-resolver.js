@@ -26,18 +26,22 @@ export const releaseVersionForBump = (currentVersion, bump) => {
 export const defaultDevelopmentVersion = (releaseVersion, developmentSuffix) =>
     `${semver.inc(releaseVersion, 'patch')}-${developmentSuffix}`;
 
-export const checkVersions = ({ currentVersion, releaseVersion, developmentVersion, developmentSuffix }) => {
+export const checkReleaseVersion = ({ currentVersion, releaseVersion, developmentSuffix }) => {
     if (!isStrictSemVer(releaseVersion)) {
         return `release version "${releaseVersion}" is not valid SemVer`;
-    }
-    if (!isStrictSemVer(developmentVersion)) {
-        return `development version "${developmentVersion}" is not valid SemVer`;
     }
     if (semver.prerelease(releaseVersion)?.[0] === developmentSuffix) {
         return `release version ${releaseVersion} must not use the development suffix "${developmentSuffix}"`;
     }
     if (!semver.gt(releaseVersion, currentVersion)) {
         return `release version ${releaseVersion} must be greater than current version ${currentVersion}`;
+    }
+    return undefined;
+};
+
+export const checkDevelopmentVersion = ({ releaseVersion, developmentVersion }) => {
+    if (!isStrictSemVer(developmentVersion)) {
+        return `development version "${developmentVersion}" is not valid SemVer`;
     }
     if (!hasPrerelease(developmentVersion)) {
         return `development version ${developmentVersion} must contain a prerelease component`;
@@ -47,6 +51,10 @@ export const checkVersions = ({ currentVersion, releaseVersion, developmentVersi
     }
     return undefined;
 };
+
+export const checkVersions = ({ currentVersion, releaseVersion, developmentVersion, developmentSuffix }) =>
+    checkReleaseVersion({ currentVersion, releaseVersion, developmentSuffix }) ??
+    checkDevelopmentVersion({ releaseVersion, developmentVersion });
 
 const preconditionError = (message) => new ReleasemakerError(`[prepare] ${message}`, EXIT_CODES.preconditionFailure);
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCliArgs } from '../../src/cli/args.js';
+import { parsePrepareArgs as parseCliArgs } from '../../src/cli/args.js';
 
 test('parses long value options into camelCase keys', () => {
     // Given

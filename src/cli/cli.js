@@ -7,6 +7,8 @@ const HELP_FLAGS = ['--help', '-h'];
 const command = process.argv[2];
 const commandArguments = process.argv.slice(3);
 
+const io = { input: process.stdin, output: process.stdout, isTTY: process.stdin.isTTY === true };
+
 const run = async () => {
     if (command === undefined) {
         console.error(USAGE);
@@ -19,15 +21,13 @@ const run = async () => {
     }
     if (command === 'prepare') {
         const { prepare } = await import('./prepare.js');
-        await prepare(commandArguments, process.cwd());
+        await prepare(commandArguments, process.cwd(), io);
         return;
     }
     if (command === 'perform') {
-        if (commandArguments.some((argument) => HELP_FLAGS.includes(argument))) {
-            console.log(USAGE);
-            return;
-        }
-        throw new ReleasemakerError('[perform] No prepared release could be resolved.', EXIT_CODES.preconditionFailure);
+        const { perform } = await import('./perform.js');
+        await perform(commandArguments, process.cwd());
+        return;
     }
     throw new ReleasemakerError(`[usage] unknown command "${command}"; use "prepare" or "perform"`, EXIT_CODES.invalidUsage);
 };

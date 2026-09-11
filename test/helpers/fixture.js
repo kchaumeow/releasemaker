@@ -20,7 +20,7 @@ export const createFixture = (filesByName = {}) => {
 
 export const removeFixture = (directory) => rmSync(directory, { recursive: true, force: true });
 
-export const runCli = (argumentList, cwd) => {
-    const { status, stdout, stderr } = spawnSync(process.execPath, [CLI_PATH, ...argumentList], { cwd, encoding: 'utf8' });
+export const runCli = (argumentList, cwd, env = process.env) => {
+    const { status, stdout, stderr } = spawnSync(process.execPath, [CLI_PATH, ...argumentList], { cwd, encoding: 'utf8', env });
     return { status, stdout, stderr };
 };
