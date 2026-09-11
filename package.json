@@ -1,15 +1,22 @@
 {
   "name": "releasemaker",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "description": "Maven Release Plugin-like prepare/perform workflow for pnpm projects",
+  "type": "module",
   "bin": "./src/cli/cli.js",
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "module",
-  "dependencies": {}
+  "dependencies": {
+    "semver": "^7.8.5"
+  }
 }
