@@ -1,39 +1,53 @@
-import { readFile } from 'node:fs/promises'
-import { DEFAULT_CONFIG } from './default-config.js'
-import { checkConfig } from './config-checker.js'
+import { access, readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { EXIT_CODES, ReleasemakerError } from '../errors.js';
+import { DEFAULT_CONFIG } from './default-config.js';
+import { checkConfig } from './config-checker.js';
 
-const CONFIG_PATHS = ['releasemaker.json', '.releasemakerrc']
+const CONFIG_FILE_NAMES = ['releasemaker.json', '.releasemakerrc'];
 
-/**
- * Loads the config from the first existing config file, filling gaps with defaults.
- * @returns {Promise<import('./default-config.js').Config>}
- */
-export const loadConfig = async () => {
-    const configText = await readFirstExistingFile(CONFIG_PATHS)
-    let config = {}
-    if (configText !== undefined) {
-        config = JSON.parse(configText)
-        const error = checkConfig(config)
-        if (error) {
-            throw new Error(error)
+const configError = (message) => new ReleasemakerError(`[config] ${message}`, EXIT_CODES.invalidUsage);
+
+const exists = async (filePath) => {
+    try {
+        await access(filePath);
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+const findConfigFile = async (directory) => {
+    const present = [];
+    for (const fileName of CONFIG_FILE_NAMES) {
+        if (await exists(path.join(directory, fileName))) {
+            present.push(fileName);
         }
     }
-    return { ...structuredClone(DEFAULT_CONFIG), ...config }
-}
-
-/**
- * Reads the first file among the given paths that exists.
- * @param {string[]} paths
- * @returns {Promise<string | undefined>}
- */
-const readFirstExistingFile = async (paths) => {
-    for (const path of paths) {
-        try {
-            return await readFile(path, 'utf8')
-        } catch (error) {
-            if (error.code !== 'ENOENT') {
-                throw error
-            }
-        }
+    if (present.length > 1) {
+        throw configError(`both ${present.join(' and ')} exist; keep exactly one`);
     }
-}
+    return present[0];
+};
+
+const parseConfigFile = async (directory, fileName) => {
+    const text = await readFile(path.join(directory, fileName), 'utf8');
+    try {
+        return JSON.parse(text);
+    } catch (error) {
+        throw configError(`${fileName} is not valid JSON: ${error.message}`);
+    }
+};
+
+export const loadConfig = async (directory) => {
+    const fileName = await findConfigFile(directory);
+    if (fileName === undefined) {
+        return { ...DEFAULT_CONFIG };
+    }
+    const config = await parseConfigFile(directory, fileName);
+    const error = checkConfig(config);
+    if (error) {
+        throw configError(`${fileName}: ${error}`);
+    }
+    return { ...DEFAULT_CONFIG, ...config };
+};
