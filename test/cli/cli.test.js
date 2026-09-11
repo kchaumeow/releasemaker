@@ -17,7 +17,7 @@ test('--help prints usage and exits 0', () => {
 
     // Then
     assert.equal(result.status, 0);
-    assert.match(result.stdout, /--release-version/);
+    assert.match(result.stdout, /Usage: releasemaker <command>/);
 });
 
 test('-h prints usage and exits 0', () => {
@@ -53,5 +53,14 @@ test('prepare --help prints usage and exits 0', () => {
 
     // Then
     assert.equal(result.status, 0);
-    assert.match(result.stdout, /Usage: releasemaker/);
+    assert.match(result.stdout, /--release-version/);
+});
+
+test('perform --help prints the perform usage and exits 0', () => {
+    // Given / When
+    const result = runCli(['perform', '--help']);
+
+    // Then
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /--skip-build/);
 });
