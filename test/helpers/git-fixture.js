@@ -47,7 +47,7 @@ export const createGitRepository = (filesByName = {}, { withRemote = true, branc
     let remote;
     if (withRemote) {
         remote = path.join(root, 'origin.git');
-        git(root, 'init', '--quiet', '--bare', remote);
+        git(root, 'init', '--quiet', '--bare', '--initial-branch', branch, remote);
         git(directory, 'remote', 'add', 'origin', remote);
         git(directory, 'push', '--quiet', '--set-upstream', 'origin', branch);
     }
